@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the main window may do: call Looksie's own commands, match its title bar to light or dark, check for and install a signed update, and restart. Nothing else.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "updater:default",
+    "process:allow-restart",
+    "core:window:allow-set-theme",
+    "core:window:allow-set-background-color"
+  ]
+}

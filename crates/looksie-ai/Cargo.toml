@@ -1,0 +1,10 @@
+[package]
+name = "looksie-ai"
+description = "How Looksie asks an AI model about a review, with the reviewer's own API key: the exact request, and nothing else. Open source."
+license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+reqwest.workspace = true

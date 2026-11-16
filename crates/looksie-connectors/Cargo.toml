@@ -1,0 +1,14 @@
+[package]
+name = "looksie-connectors"
+description = "Looksie's connectors: every network call to a git host lives here. Open source."
+license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+looksie-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+regex.workspace = true
+futures-util = { version = "0.3", default-features = false, features = ["std"] }

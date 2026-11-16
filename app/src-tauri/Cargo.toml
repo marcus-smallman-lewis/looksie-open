@@ -1,0 +1,32 @@
+[package]
+name = "looksie-app"
+description = "Looksie desktop app"
+license = "FSL-1.1-ALv2"
+publish = false
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "looksie_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+sha2 = "0.10"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+looksie-protocol.workspace = true
+looksie-connectors.workspace = true
+looksie-core.workspace = true
+looksie-engine.workspace = true
+looksie-ai.workspace = true
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-clipboard-manager = "2"
+reqwest.workspace = true
+dirs = "7"

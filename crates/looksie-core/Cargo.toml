@@ -1,0 +1,16 @@
+[package]
+name = "looksie-core"
+description = "Fetches a pull request through a connector and hands it to the engine; keeps AI answers; the MCP server. Open source."
+license = "Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+looksie-protocol.workspace = true
+looksie-engine.workspace = true
+looksie-connectors.workspace = true
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"

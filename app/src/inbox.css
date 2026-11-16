@@ -1,0 +1,319 @@
+/* The inbox for people with hundreds of pull requests, the account switcher, and the Connections page.
+   Shared by the app and by docs/design/connections-and-inbox.html, so the design and the build cannot drift. */
+
+/* ---- the page header: title on the left, who you are signed in as on the right */
+.phead{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.wrap.wide{max-width:1360px}
+
+/* ---- account chip and its menu */
+.acctwrap{position:relative}
+.acct{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:4px 14px 4px 6px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-weight:500}
+.acct:hover{box-shadow:var(--shadow)}
+.acct .who{display:flex;flex-direction:column;line-height:1.2}
+.acct .who span{font-size:11px;color:var(--mute);font-weight:400}
+.acct .ic{width:16px;height:16px;color:var(--mute)}
+.face{width:32px;height:32px;border-radius:50%;background:var(--acc-soft);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;flex:none;text-transform:uppercase}
+.face.sm{width:26px;height:26px;font-size:12px}
+.face.off{background:var(--bg);color:var(--mute)}
+.menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;width:340px;background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--line),0 18px 44px rgba(30,20,10,.18);padding:8px}
+.menu .mhd{font-size:11px;font-weight:600;color:var(--mute);padding:8px 10px 4px}
+.mrow{display:flex;gap:10px;align-items:center;width:100%;padding:8px 10px;border-radius:12px}
+button.mrow:hover{background:var(--bg)}
+.mrow .who{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.mrow .who span{font-size:12px;color:var(--mute)}
+.mrow.on{background:var(--acc-soft)}
+.msep{height:1px;background:var(--line);margin:6px 2px}
+
+/* ---- inbox toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.search{flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:0 14px;min-height:40px}
+.search .ic{width:16px;height:16px;color:var(--mute)}
+.search input{flex:1;min-width:0;font:inherit;color:var(--ink);background:none;border:0;outline:0;padding:8px 0}
+.search:focus-within{outline:2px solid var(--acc);outline-offset:2px}
+.segc{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.segc button{min-height:32px;padding:0 13px;border-radius:999px;font-size:13px;font-weight:500;color:var(--mute);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.segc button:hover{color:var(--ink)}
+.segc button.on{background:var(--acc-soft);color:var(--acc)}
+.segc button i{font-style:normal;font-size:11px;opacity:.8}
+.segc .ic{width:16px;height:16px}
+.pill{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:500;white-space:nowrap}
+.pill:hover{box-shadow:var(--shadow)}
+.pill .ic{width:15px;height:15px;color:var(--mute)}
+.pill.on{border-color:var(--acc);color:var(--acc)}
+select.pill{font:inherit;font-size:13px;font-weight:500;color:var(--ink);appearance:none;padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 17px) 17px,calc(100% - 12px) 17px;background-size:5px 5px;background-repeat:no-repeat;max-width:260px}
+
+/* ---- compact list */
+.clist{background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.chead{display:flex;align-items:center;gap:10px;width:100%;padding:7px 14px;background:var(--bg);border-top:1px solid var(--line);font-size:12px;font-weight:600;color:var(--mute)}
+.clist > .chead:first-child{border-top:0}
+.chead .ic{width:14px;height:14px}
+.chead .n{font-weight:500}
+.chead .sp{flex:1}
+.chead.closed .ic{transform:rotate(-90deg)}
+.crow{display:flex;align-items:center;gap:12px;min-height:38px;padding:0 14px 0 4px;border-top:1px solid var(--line);font-size:13.5px}
+.crow:hover{background:var(--bg)}
+.crow .pick{width:34px;height:38px;border-radius:8px}
+.crow .pick i{width:16px;height:16px;border-radius:5px}
+.crow .pick.on i:after{left:4px;top:1px;width:4px;height:8px}
+.crow .open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;min-height:38px}
+.crow .ti{flex:1 1 200px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.crow .rp{flex:0 1 230px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);font-size:12px;color:var(--mute)}
+.crow .au{flex:0 0 120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--mute)}
+.crow .tg{flex:0 0 124px;display:flex;gap:4px;justify-content:flex-end}
+.crow .tag{font-size:11px;padding:1px 8px}
+.crow .sz{flex:0 0 108px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mute);white-space:nowrap}
+.crow .sz b{font-weight:500;color:var(--add-ink)}
+.crow .sz u{text-decoration:none;color:var(--del-ink)}
+.crow .ag{flex:0 0 40px;text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
+.crow.mine .ti:after{content:"yours";margin-left:8px;font-size:11px;font-weight:500;color:var(--mute)}
+.cfoot{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--mute)}
+@media (max-width:1000px){.crow .au,.crow .tg{display:none}.crow .rp{flex-basis:150px}}
+@media (max-width:640px){.crow .rp,.crow .ag{display:none}}
+
+/* ---- groups, compact: one line each, open one to see what is in it */
+.gline{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 10px 4px 14px;border-top:1px solid var(--line);background:var(--acc-soft)}
+.clist > .gline:first-child{border-top:0}
+.gline .gt{flex:1 1 220px;min-width:0;display:flex;align-items:baseline;gap:10px;white-space:nowrap;overflow:hidden}
+.gline .gt b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.gline .gt span{font-size:12.5px;color:var(--mute);overflow:hidden;text-overflow:ellipsis}
+.gline .why{flex:0 1 300px;min-width:0;font-size:12.5px;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gline .btn.sm{min-height:30px;padding:0 13px;font-size:13px}
+.gline .x{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mute)}
+.gline .x:hover{background:var(--card);color:var(--ink)}
+.gline .x .ic{width:15px;height:15px}
+.gline .tw .ic{width:14px;height:14px;color:var(--mute)}
+.gline.closed .tw .ic{transform:rotate(-90deg)}
+.crow.in{padding-left:30px;background:color-mix(in srgb,var(--acc-soft) 35%,var(--card))}
+@media (max-width:900px){.gline .why{display:none}}
+
+/* ---- Connections page */
+.csec{display:flex;flex-direction:column;gap:4px}
+.csec > .chd{margin-bottom:10px}
+.arow{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.arow:first-of-type{border-top:0}
+.arow .who{flex:1 1 150px;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.arow .who b{font-weight:600}
+.arow .who span{font-size:13px;color:var(--mute)}
+.arow .st{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+.arow .st.ok{color:var(--ok)}
+.arow .st.bad{color:var(--bad)}
+.arow .acts{display:flex;gap:6px;align-items:center}
+.dot.bad{background:var(--bad);border-color:var(--bad)}
+.soon{display:flex;flex-wrap:wrap;gap:8px}
+.soon span{font-size:13px;padding:5px 12px;border-radius:999px;background:var(--bg);color:var(--mute)}
+.formrow{display:flex;flex-direction:column;gap:6px}
+.formrow label{font-size:13px;font-weight:500}
+.formrow .hint{font-size:12.5px;color:var(--mute)}
+.field.sq{border-radius:14px;flex:none;width:100%}
+.note{font-size:12.5px;color:var(--mute);background:var(--bg);border-radius:14px;padding:10px 14px}
+
+/* ---- loading, freshness and status */
+.spin{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--acc-soft);border-top-color:var(--acc);flex:none;display:inline-block;animation:spin .8s linear infinite}
+.spin.sm{width:13px;height:13px;border-width:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.app .spin{transition:none}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.loadrow{display:flex;gap:14px;align-items:center;padding:16px 18px}
+.skel{display:flex;gap:16px;align-items:center;min-height:42px;padding:0 18px 0 52px;border-top:1px solid var(--line);animation:pulse 1.4s ease-in-out infinite both}
+.skel i{display:block;height:10px;border-radius:6px;background:var(--line)}
+.skel i:first-child{flex:none}
+.skel i:nth-child(2){width:18%}
+.skel i:nth-child(3){width:9%;margin-left:auto}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+.newpill{position:sticky;top:8px;z-index:4;align-self:center;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 16px;border-radius:999px;background:var(--acc);color:var(--on-acc)!important;font-weight:500;font-size:13.5px;box-shadow:var(--shadow);animation:fadeIn .3s ease both}
+.newpill .ic{width:15px;height:15px}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.crow .tg{flex:0 0 190px}
+.linkb{color:var(--acc);font-weight:500;text-decoration:underline;text-underline-offset:2px}
+.info{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--mute)}
+.info:hover{color:var(--acc);background:var(--acc-soft)}
+.info .ic{width:15px;height:15px}
+.menuveil{position:fixed;inset:0;z-index:19;cursor:default}
+.mrow .ic{width:16px;height:16px}
+.mrow.on .ic{color:var(--acc)}
+.arow .formrow{margin-top:4px}
+.chead .mono{font-size:12px;font-weight:500}
+
+/* ---- map: the grid is recessed, the steps sit on top of it, in both themes */
+.matrix{background:var(--card);border-radius:22px;padding:14px;box-shadow:var(--shadow)}
+.cell{background:var(--bg);box-shadow:none;border-radius:16px}
+.mnode:not(.look):not(.problem):not(.change):not(.fine):not(.question){background:var(--card)}
+.mnode{box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mnode.glance{opacity:.7}
+
+/* ---- moving between decisions: a quick slide from the side it comes from */
+.glide.fa,.glide.fb{animation:gfa .32s cubic-bezier(.2,.75,.25,1) both}
+.glide.ba,.glide.bb{animation:gba .32s cubic-bezier(.2,.75,.25,1) both}
+
+/* ---- an update is ready: a quiet card in the corner, never a pop-up in the way */
+.uptoast{position:absolute;left:100px;bottom:20px;z-index:8;width:min(380px,calc(100% - 120px));background:var(--card);border-radius:20px;box-shadow:0 0 0 1px var(--line),0 18px 44px rgba(30,20,10,.18);padding:14px 16px;display:flex;flex-direction:column;gap:10px;animation:sheetIn .38s cubic-bezier(.2,.8,.2,1) both}
+.uptoast .x{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mute);flex:none}
+.uptoast .x:hover{background:var(--bg);color:var(--ink)}
+.uptoast .x .ic{width:15px;height:15px}
+@media (max-width:700px){.uptoast{left:12px;width:calc(100% - 24px)}}
+
+/* ---- AI at work */
+.aiprog{display:flex;flex-direction:column;gap:8px}
+.pbar.slim{height:6px;margin-top:2px}
+.pbar.slim i{animation:none;transition:width 1s linear}
+.tag .spin.sm{width:11px;height:11px;border-width:1.5px}
+.toggle{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--bg);cursor:pointer}
+.toggle input{width:18px;height:18px;margin-top:3px;accent-color:var(--acc);flex:none}
+.segc .ic{width:16px;height:16px}
+
+/* ---- scrollbars follow the theme, everywhere (pages, lists, code) */
+.t-light{color-scheme:light}
+.t-dark{color-scheme:dark}
+.app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--mute) 45%,transparent) transparent}
+.app ::-webkit-scrollbar{width:10px;height:10px}
+.app ::-webkit-scrollbar-track{background:transparent}
+.app ::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--mute) 40%,transparent);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+.app ::-webkit-scrollbar-corner{background:transparent}
+
+/* ---- map connection lines: faint by default, the selected card's links stand out */
+.matrix{position:relative}
+.mnode{position:relative;z-index:2}
+.medges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.medges path{fill:none;stroke:var(--mute);stroke-width:1.5;opacity:.35;stroke-linecap:round}
+.medges path.hot{stroke:var(--acc);stroke-width:2.5;opacity:1}
+.medges path.tip{fill:var(--mute);stroke:none;opacity:.6}
+.medges path.tip.hot{fill:var(--acc);opacity:1}
+
+/* Wide gaps between the map's columns and rows: the connection lines run in them. */
+.matrix{column-gap:40px;row-gap:16px}
+.medges path{stroke-linejoin:round}
+
+/* ---- briefing: the side panel stays in view while the briefing scrolls; it scrolls by itself only if taller than the window */
+.sidepanel{position:sticky;top:16px;align-self:flex-start;max-height:calc(100vh - 136px);overflow-y:auto;padding:2px 4px 4px;margin:-2px -4px -4px}
+.nextup{display:flex;flex-direction:column;gap:10px;box-shadow:0 0 0 2px var(--acc),var(--shadow)}
+@media (max-width:860px){.sidepanel{position:static;max-height:none;overflow:visible}}
+
+/* ---- map row labels: never wider than their cell */
+.lanelabel{display:flex;gap:6px;min-width:0;max-width:100%;white-space:nowrap;cursor:default}
+.lanelabel .ln-name{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.lanelabel .ln-num{flex:none}
+.cell{min-width:0}
+.matrix{padding:14px 34px 14px 14px}
+
+/* ---- step links ("Builds on", "Leads to"): never wider than where they sit; full name on hover */
+.mark.chip{display:inline-flex;gap:4px;max-width:100%;min-width:0}
+.mark.chip .chip-k{flex:none}
+.mark.chip .chip-t{overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+/* A list's first row needs no line above it (the group suggestion card, and any list that starts a box). */
+.rowi:first-child{border-top:0}
+
+/* ---- comments float over the diff by their line; closed, they are a marker in the margin */
+.lnwrap{position:relative}
+.ln.has-c{box-shadow:inset 3px 0 var(--acc)}
+.cmark{min-width:22px;height:22px;margin-left:8px;padding:0 6px;border-radius:999px;background:var(--acc);color:var(--on-acc);font-family:var(--sans);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+.cmark.theirs{background:var(--line);color:var(--ink)}
+.cmark:hover{transform:scale(1.08)}
+.cpop{position:absolute;left:98px;top:calc(100% + 4px);z-index:6;width:min(560px,calc(100% - 120px));background:var(--card);border-radius:16px;box-shadow:0 0 0 1px var(--line),0 14px 36px rgba(20,15,10,.22);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px;font-family:var(--sans);font-size:14px;animation:fadeIn .15s ease both}
+.cpop.up{top:auto;bottom:calc(100% + 4px)}
+.cpop .thread{margin:0;max-width:none}
+.cpop-hd{display:flex;justify-content:space-between;align-items:center}
+.cpop .x{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mute)}
+.cpop .x:hover{background:var(--bg);color:var(--ink)}
+.cpop .x .ic{width:14px;height:14px}
+.cpop .acts{display:flex;gap:6px;margin-top:6px}
+@media (max-width:700px){.cpop{left:12px;width:calc(100% - 24px)}}
+
+/* ---- Decisions' views switch sits in one fixed place, under the review's header, so it never moves */
+.subbar{display:flex;justify-content:flex-end;padding:8px 28px;border-bottom:1px solid var(--line);flex:none}
+@media (max-width:700px){.subbar{justify-content:center;padding:8px 12px}}
+
+/* ---- settings: rows with a switch, in the app's style */
+.setlist{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+.setrow{display:flex;align-items:center;gap:14px;width:100%;padding:10px 12px;border-radius:14px;background:var(--bg)}
+.setrow:hover{box-shadow:0 0 0 1px var(--line)}
+.setrow .txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.setrow .txt b{font-weight:600;font-size:14.5px}
+.setrow .txt .mute{font-size:13px}
+.sw{width:42px;height:24px;border-radius:999px;background:var(--line);position:relative;flex:none;transition:background .2s ease}
+.sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s cubic-bezier(.3,.7,.3,1)}
+.sw.on{background:var(--acc)}
+.sw.on i{transform:translateX(18px);background:#fff}
+/* ---- the logo opens About */
+.logobtn{border-radius:14px;margin-bottom:10px;display:flex}
+.logobtn .logo{margin:0}
+.logobtn:hover{transform:scale(1.05)}
+
+/* ---- group cards fold up: the chevron turns, and the folded card keeps its title, one reason and its buttons */
+.fold{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--acc);background:var(--card)}
+.fold:hover{transform:scale(1.08)}
+.fold .ic{width:16px;height:16px;transition:transform .2s ease}
+.gcardx.folded .fold .ic{transform:rotate(-90deg)}
+
+/* The account menu never runs off the window: it opens to the right when the chip is on the left. */
+.menu{max-width:calc(100vw - 110px)}
+.menu.left{right:auto;left:0}
+
+/* ---- the trial note in the inbox: the last 3 days, and once when it has finished */
+.trialnote{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--acc-soft);color:var(--acc);border-radius:14px;padding:10px 12px 10px 16px;font-weight:500}
+.trialnote > .ic{width:18px;height:18px;flex:none}
+.trialnote > span{flex:1 1 240px;min-width:0}
+.trialnote .x{width:28px;height:28px;border-radius:50%;font-size:18px;line-height:1;color:inherit;opacity:.7}
+.trialnote .x:hover{opacity:1;background:var(--card)}
+.search input:focus-visible{outline:0}
+
+/* ---- diffs on a decision: each folds up, and a bar that stays in view steps between files */
+.diffnav{position:sticky;top:8px;z-index:3;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border-radius:999px;padding:6px 8px 6px 18px;box-shadow:var(--shadow)}
+.diff[data-diff]{scroll-margin-top:64px}
+.diff.shut{padding-bottom:0}
+.diff.shut .fhead{margin-bottom:0;border-bottom:0}
+.fhead .fold{flex:none;width:26px;height:26px}
+.diff.shut .fold .ic{transform:rotate(-90deg)}
+
+/* ---- one width for every side column in a review (briefing, decisions, files, send), whatever is in it */
+.cols > .aside.side{flex:0 0 340px;width:340px;min-width:0}
+@media (max-width:860px){.cols > .aside.side{flex:1 1 100%;width:auto}}
+
+/* ---- the briefing side panel: grouped "Needs you", and soft edges where it scrolls */
+.needs{display:flex;flex-direction:column;gap:10px}
+.needs > p,.needs > div > p{margin:0}
+.needs .names{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.needs .names span{font-size:12px;padding:3px 8px;border-radius:8px;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);word-break:break-all}
+.needs > .tag{align-self:flex-start}
+.sidepanel.fb{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 56px),transparent)}
+.sidepanel.ft{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 40px);mask-image:linear-gradient(to bottom,transparent,#000 40px)}
+.sidepanel.ft.fb{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 40px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(to bottom,transparent,#000 40px,#000 calc(100% - 56px),transparent)}
+
+/* ---- Your AI: two ways (API key, own agent), models to pick from, and lines to copy */
+.aiway{display:flex;flex-direction:column;gap:10px;padding:14px 0;border-top:1px solid var(--line)}
+.aiway:first-of-type{border-top:0;padding-top:4px}
+.models{display:flex;flex-direction:column;gap:6px}
+.company{display:inline-flex;align-self:flex-start;gap:2px;padding:3px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.company button{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;border:0;background:none;color:var(--mute);font:inherit;font-size:13px;cursor:pointer}
+.company button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.company .dot{width:7px;height:7px}
+.model{display:flex;justify-content:space-between;gap:10px;align-items:baseline;text-align:left;padding:10px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--card)}
+.model.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.model .mute{font-size:12.5px}
+.copyable{display:flex;flex-direction:column;gap:4px;min-width:0}
+.copyable .row{display:flex;gap:8px;align-items:center;min-width:0}
+.copyable code{font-variant-ligatures:none;flex:1;min-width:0;font-size:12px;padding:8px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);overflow-x:auto;white-space:nowrap}
+.agentway{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.agentway summary{cursor:pointer;font-weight:500;font-size:13.5px;color:var(--acc)}
+.agentway[open]{gap:10px}
+.agentway[open] > *:not(summary){margin-top:10px}
+.linkish{color:var(--acc);text-decoration:underline;background:none;padding:0;font:inherit}
+.agentrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg)}
+.agentrow .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.agentrow .t b{display:flex;align-items:center;gap:6px;font-weight:600}
+.agentrow .t .mono{font-size:12px}
+/* Side-by-side diffs: old on the left, new on the right. Long lines wrap so both sides stay in view. */
+.segc.sm{padding:2px}
+.segc.sm button{min-height:26px;padding:0 11px;font-size:12px}
+.split .lnpair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.split .lnpair>.lnwrap+.lnwrap{border-left:1px solid var(--line)}
+.split .ln{height:100%;align-items:flex-start}
+.split .ln .num,.split .ln .sign,.split .ln code{line-height:24px}
+.split .ln .num{width:42px;padding-right:8px}
+.split .ln code{white-space:pre-wrap;overflow-wrap:anywhere;padding-right:12px}
+.split .ln .plus,.split .ln .cmark{margin-top:1px}
+.split .cpop{left:12px;width:min(520px,calc(100% - 24px))}
+.ln .lgap{width:22px;margin-left:8px;flex:none}
+.ln.none{min-height:24px;background:repeating-linear-gradient(-45deg,transparent 0 7px,var(--line) 7px 8px)}
+.segc button{font-family:var(--sans)}

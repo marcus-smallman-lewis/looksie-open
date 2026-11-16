@@ -1,0 +1,17 @@
+# The open crates that build without Looksie's closed engine. looksie-core and the app link the engine, so they are
+# here to read, not to build.
+[workspace]
+resolver = "2"
+members = ["crates/looksie-protocol", "crates/looksie-connectors", "crates/looksie-ai"]
+exclude = ["crates/looksie-core", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+looksie-protocol = { path = "crates/looksie-protocol" }

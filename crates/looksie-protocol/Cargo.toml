@@ -1,0 +1,9 @@
+[package]
+name = "looksie-protocol"
+description = "Looksie's data model: reviews, steps, briefings, comments. Open source."
+license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
