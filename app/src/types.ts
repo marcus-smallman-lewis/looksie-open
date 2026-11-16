@@ -82,6 +82,8 @@ export type Step = {
   buildsOn: string[];
   leadsTo: string[];
   ai: { question: string; why: string; flag: Flag } | null;
+  /** Scored like a decision, but past the limit for a review this size. Waits first among the quick looks. */
+  overLimit?: boolean;
 };
 
 export type ClaimStatus = "backed" | "contradicted" | "not-found" | "unchecked";

@@ -260,6 +260,10 @@ pub struct Step {
     pub builds_on: Vec<String>,
     pub leads_to: Vec<String>,
     pub ai: Option<StepAi>,
+    /// Scored like a decision, but the review already had as many as its size calls for. It waits first among the
+    /// quick looks, and the reviewer can make every such step a decision with one click.
+    #[serde(default)]
+    pub over_limit: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

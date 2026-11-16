@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type ReadyUpdate } from "./api";
 import { Diff, Ext, FileHead, Folded, Ic, Logo } from "./ui";
 import {
@@ -75,6 +75,8 @@ export function App() {
   const [closedRepos, setClosedRepos] = useState<string[]>([]);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
   const [how, setHow] = useState(false);
+  // The review (by id) whose over-limit steps the reviewer made into decisions. Another review starts with the limit on.
+  const [allIn, setAllIn] = useState<string | null>(null);
   const [about, setAbout] = useState(false);
   // Group cards the reviewer has folded up. Remembered, so a folded group stays folded.
   const [folded, setFolded] = useState<string[]>(() => load<string[]>("looksie:folded-groups", []));
@@ -369,7 +371,15 @@ export function App() {
   };
   const groupKey = (g: GroupSuggestion) => g.prs.map(prKey).sort().join("+");
 
-  const steps = review?.steps ?? [];
+  // With the limit lifted, steps over it become decisions, after the others and strongest first (the engine's order).
+  const lifted = !!review && allIn === review.id;
+  const steps: Step[] = (() => {
+    const s = review?.steps ?? [];
+    if (!lifted) return s;
+    const as = s.map((x) => (x.overLimit ? { ...x, tier: "decide" as const } : x));
+    return [...as.filter((x) => x.tier === "decide"), ...as.filter((x) => x.tier !== "decide")];
+  })();
+  const overLimit = (review?.steps ?? []).filter((s) => s.overLimit).length;
   const cur: Step | undefined = steps[Math.min(stepIdx, Math.max(steps.length - 1, 0))];
   // The AI layer sits on top of the facts. Switch it off and everything below falls back to rules only.
   // AI comes from the reviewer's own Anthropic or OpenAI API key, or from their own Claude Code or Codex (Settings, Your AI).
@@ -1021,6 +1031,14 @@ export function App() {
                     <p className="cap">Next</p>
                     <p className="gname" style={{ fontSize: 18 }}>{total > 0 ? `${plural(total, "decision")} to make` : "Nothing needs a decision"}{routine.length > 0 && <span className="mute" style={{ fontSize: 14, fontWeight: 400 }}>{` · ${plural(routine.length, "quick look")}`}</span>}</p>
                     <button className="btn go" style={{ justifyContent: "center", minHeight: 48 }} onClick={() => (total > 0 ? goStep(0) : go("routine"))}>{answered > 0 && answered < total ? `Carry on: ${answered} of ${total} answered` : "Start the walkthrough"}<Ic name="next" /></button>
+                    {overLimit > 0 && (
+                      <p className="mute" style={{ fontSize: 13, marginTop: 4 }}>
+                        {lifted
+                          ? `Includes ${plural(overLimit, "step")} over the usual limit for a review this size. `
+                          : `${plural(overLimit, "more step")} scored like ${overLimit === 1 ? "a decision" : "decisions"} but ${overLimit === 1 ? "is" : "are"} over the limit for a review this size. ${overLimit === 1 ? "It comes" : "They come"} first in the quick looks. `}
+                        <button className="linkb" onClick={() => { setAllIn(lifted ? null : review.id); setStepIdx(0); }}>{lifted ? "Back to the limit" : overLimit === 1 ? "Make it a decision too" : "Make them decisions too"}</button>
+                      </p>
+                    )}
                   </div>
                 )}
                 {review.briefing.needsYou.length > 0 && (() => {
@@ -1231,18 +1249,23 @@ export function App() {
         {screen === "routine" && review && (
           <div className={screenCls}><div className="wrap">
             <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div><p className="mute">{answered === total ? "All decisions answered." : `${answered} of ${total} decisions answered.`} Optional from here.</p><h1 className="h1" style={{ marginTop: 4 }}>Quick looks</h1><p className="mute" style={{ marginTop: 6 }}>Looksie thinks these do not need a decision. Each says why. Glance at any you like, or go straight to sending. <button className="linkb" onClick={() => setHow(true)}>How Looksie decides</button></p></div>
+              <div><p className="mute">{answered === total ? "All decisions answered." : `${answered} of ${total} decisions answered.`} Optional from here.</p><h1 className="h1" style={{ marginTop: 4 }}>Quick looks</h1><p className="mute" style={{ marginTop: 6 }}>{overLimit > 0 && !lifted ? "Looksie thinks these do not need a decision, or the review already has as many as its size calls for." : "Looksie thinks these do not need a decision."} Each says why. Glance at any you like, or go straight to sending. <button className="linkb" onClick={() => setHow(true)}>How Looksie decides</button></p></div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button className="btn" onClick={() => goStep(Math.max(0, Math.min(stepIdx, total - 1)))}><Ic name="back" />Decisions</button>
                 <button className="btn" onClick={() => setSaved((v) => ({ ...v, answers: { ...v.answers, ...Object.fromEntries(routine.filter((s) => !v.answers[s.id]).map((s) => [s.id, "fine" as Answer])) } }))}>Mark all as looked at</button>
                 <button className="btn go" onClick={() => go("submit")}>Send review<Ic name="next" /></button>
               </div>
             </div>
-            {routine.map((s) => {
+            {routine.map((s, k) => {
               const i = steps.indexOf(s);
               const lines = s.files.reduce((a, f) => a + f.additions + f.deletions, 0);
+              // When some steps are over the limit, they come first under their own heading, then the routine ones.
+              const head = routine.some((x) => x.overLimit) && (k === 0 || !!routine[k - 1].overLimit !== !!s.overLimit)
+                ? (s.overLimit ? `Over the limit: ${plural(routine.filter((x) => x.overLimit).length, "step")} that scored like decisions, strongest first` : "Routine changes")
+                : null;
               return (
-                <div className="dcard" key={s.id} style={{ display: "flex", flexWrap: "wrap", gap: "10px 16px", alignItems: "center" }}>
+                <Fragment key={s.id}>{head && <p className="cap" style={{ marginTop: 18 }}>{head}{s.overLimit && <> · <button className="linkb" onClick={() => { setAllIn(review.id); goStep(total); }}>Make them decisions too</button></>}</p>}
+                <div className="dcard" style={{ display: "flex", flexWrap: "wrap", gap: "10px 16px", alignItems: "center" }}>
                   <span style={{ flex: "1 1 360px", minWidth: 0 }}>
                     <span className="gname">{s.title}</span><br />
                     <span className="mute" style={{ fontSize: 13 }}>{LAYERS.find((l) => l.id === s.layer)?.title} · {plural(s.files.length, "file")} · {plural(lines, "line")} · <span className="mono">{[...new Set(s.files.map((f) => prShort(f.pr)))].join(" + ")}</span></span>
@@ -1252,7 +1275,7 @@ export function App() {
                   <button className={"vbtn fine" + (saved.answers[s.id] === "fine" ? " on" : "")} style={{ minHeight: 36, padding: "0 16px" }} aria-pressed={saved.answers[s.id] === "fine"}
                     onClick={() => setSaved((v) => ({ ...v, answers: { ...v.answers, [s.id]: v.answers[s.id] === "fine" ? undefined : "fine" } }))}><Ic name="check" />Looks fine</button>
                   {saved.answers[s.id] && saved.answers[s.id] !== "fine" && <span className={"mark " + saved.answers[s.id]}>{ANSWER_TEXT[saved.answers[s.id]!]}</span>}
-                </div>
+                </div></Fragment>
               );
             })}
           </div></div>
@@ -1453,7 +1476,7 @@ export function App() {
                   <ul className="ticks"><li>a rule found something: a package dropped from the lockfile, a workflow that cannot run, a new secret or setting, stored data being changed, tests switched off, or folders that always change together where only one did</li><li>it touches sign-in, money or secrets</li><li>it changes code that already ran, rather than only adding new code</li><li>other steps build on it, or no changed test covers it</li><li>the author left a TODO or an assumption in it</li></ul></div>
                 <div><p className="cap" style={{ marginBottom: 6 }}>It is a quick look when</p>
                   <ul className="ticks"><li>none of that applies and it is small</li><li>it is only tests or only docs</li><li>it is the same edit repeated across many files. Any file that breaks the pattern is called out, and makes it a decision</li></ul></div>
-                <p>Bigger reviews get more decisions, but slowly: about 3 for a small pull request, never more than 12. The weakest wait with the quick looks. Anything a rule flags always stays a decision.</p>
+                <p>Bigger reviews get more decisions, but slowly: about 3 for a small pull request, about 12 for a very big one. Past that, steps that scored like decisions wait first in the quick looks, marked as over the limit, and one click makes them all decisions. These are never held back by the limit: anything a rule flags, and changes to sign-in, money, secrets, stored data, or how it builds and deploys.</p>
                 <p>Generated and vendored files are set aside, but are still in Files.</p>
                 <p>With your AI on, it adds its own question to each decision and may flag a step too. Its flags are marked as AI.</p>
                 <p className="note">This is a guide to where to look, not a verdict. Open any quick look and answer it like a decision if you want to. Each step shows the reasons that applied to it.</p>
