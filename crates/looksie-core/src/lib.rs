@@ -2,6 +2,7 @@
 //! Also: where AI answers are kept (`ai_store`), and the MCP server that lets the reviewer's own agent use Looksie (`mcp`).
 
 pub mod ai_store;
+pub mod drafts;
 pub mod mcp;
 
 use looksie_connectors::{At, Connector};

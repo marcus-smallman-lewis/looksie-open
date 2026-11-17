@@ -19,6 +19,17 @@ pub fn cache_dir() -> Result<PathBuf, String> {
     Ok(d)
 }
 
+/// The reviewer's work in progress on each review (answers, notes, comments), shared with their own agent.
+/// Settings, not cache: a clean-up must never delete someone's half-done review.
+pub fn drafts_dir() -> Result<PathBuf, String> {
+    Ok(config_dir()?.join("drafts"))
+}
+
+/// Which review is open in the app, so "review the one I have open" works from Claude Code or Codex.
+pub fn current_file() -> Result<PathBuf, String> {
+    Ok(config_dir()?.join("current-review.json"))
+}
+
 /// AI answers, written by the app and by the reviewer's own agent through `looksie --mcp`.
 pub fn ai_dir() -> Result<PathBuf, String> {
     Ok(cache_dir()?.join("ai"))

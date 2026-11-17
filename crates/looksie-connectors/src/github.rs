@@ -190,6 +190,27 @@ pub fn review_payload(review: &ReviewSubmission) -> Value {
     json!({ "commit_id": review.commit, "event": event, "body": body, "comments": comments })
 }
 
+/// One changed file, as GitHub lists it for a pull request or a comparison.
+fn file_change(pr: &PrRef, f: &Value) -> FileChange {
+    FileChange {
+        pr: pr.clone(),
+        path: s(f, "filename"),
+        previous_path: f.get("previous_filename").and_then(Value::as_str).map(str::to_string),
+        kind: match s(f, "status").as_str() {
+            "added" | "copied" => ChangeKind::Added,
+            "removed" => ChangeKind::Removed,
+            "renamed" => ChangeKind::Renamed,
+            _ => ChangeKind::Modified,
+        },
+        additions: n(f, "additions"),
+        deletions: n(f, "deletions"),
+        patch: f.get("patch").and_then(Value::as_str).map(str::to_string),
+        hunks: Vec::new(),
+        url: s(f, "blob_url"),
+        trimmed: None,
+    }
+}
+
 impl GitHub {
     /// github.com.
     pub fn new(token: String) -> Result<Self, String> {
@@ -284,6 +305,19 @@ impl GitHub {
             }
         }
         Ok(out)
+    }
+
+    /// The commit a pull request's changes are measured from.
+    pub async fn base_sha(&self, pr: &PrRef) -> Result<String, String> {
+        let v = self.get(&format!("/repos/{}/{}/pulls/{}", pr.owner, pr.repo, pr.number)).await?;
+        v.pointer("/base/sha").and_then(Value::as_str).map(str::to_string).ok_or_else(|| "GitHub gave no base commit.".to_string())
+    }
+
+    /// A pull request's changes as they were at an earlier commit: base...head, where head is a commit of the pull
+    /// request. Used by the benchmark to review a pull request as the reviewer first saw it. GitHub lists at most 300 files.
+    pub async fn changes_between(&self, pr: &PrRef, base: &str, head: &str) -> Result<Vec<FileChange>, String> {
+        let v = self.get(&format!("/repos/{}/{}/compare/{base}...{head}", pr.owner, pr.repo)).await?;
+        Ok(v.get("files").and_then(Value::as_array).map(|a| a.iter().map(|f| file_change(pr, f)).collect()).unwrap_or_default())
     }
 
     /// The signed-in user's login name.
@@ -426,27 +460,9 @@ impl Connector for GitHub {
 
     async fn get_changes(&self, pr: &PrRef) -> Result<Vec<FileChange>, String> {
         let files = self.pages(&format!("/repos/{}/{}/pulls/{}/files", pr.owner, pr.repo, pr.number), 30).await?;
-        Ok(files
-            .iter()
-            .map(|f| FileChange {
-                pr: pr.clone(),
-                path: s(f, "filename"),
-                previous_path: f.get("previous_filename").and_then(Value::as_str).map(str::to_string),
-                kind: match s(f, "status").as_str() {
-                    "added" | "copied" => ChangeKind::Added,
-                    "removed" => ChangeKind::Removed,
-                    "renamed" => ChangeKind::Renamed,
-                    _ => ChangeKind::Modified,
-                },
-                additions: n(f, "additions"),
-                deletions: n(f, "deletions"),
-                patch: f.get("patch").and_then(Value::as_str).map(str::to_string),
-                hunks: Vec::new(),
-                url: s(f, "blob_url"),
-                trimmed: None,
-            })
-            .collect())
+        Ok(files.iter().map(|f| file_change(pr, f)).collect())
     }
+
 
     async fn get_file(&self, detail: &PrDetail, path: &str, at: At) -> Result<Option<String>, String> {
         let pr = &detail.summary.pr;

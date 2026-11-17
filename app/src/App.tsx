@@ -1,14 +1,55 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, type ReadyUpdate } from "./api";
+import { api, reviewKey, type ReadyUpdate } from "./api";
 import { Diff, Ext, FileHead, Folded, Ic, Logo } from "./ui";
 import {
   LAYERS, hostName, plural, prKey, prLabel, prShort, samePr,
-  type Account, type AgentState, type AiLayer, type AiProvider, type AiSetup, type CachedReview, type Answer, type GroupSuggestion, type Shop, type AuthStatus, type FileChange, type PrDetail, type PrSummary, type Review, type ReviewSubmission, type Saved, type Step, type Verdict,
+  type Account, type AgentState, type Draft, type DraftPatch, type Posted, type AiLayer, type AiProvider, type AiSetup, type CachedReview, type Answer, type GroupSuggestion, type Shop, type AuthStatus, type FileChange, type PrDetail, type PrSummary, type Review, type ReviewSubmission, type Saved, type Step, type Verdict,
 } from "./types";
 
 type Screen = "inbox" | "connections" | "plan" | "loading" | "briefing" | "map" | "step" | "routine" | "files" | "submit" | "done";
 
 const EMPTY: Saved = { answers: {}, notes: {}, comments: {}, verdicts: {}, summary: "" };
+
+// ---- Sharing work in progress with the reviewer's own agent (looksie_core::drafts). Both sides send only what changed.
+type Plain = { answers: Record<string, string>; notes: Record<string, string>; comments: Record<string, string>; verdicts: Record<string, string>; summary: string };
+const MAPS = ["answers", "notes", "comments", "verdicts"] as const;
+const EMPTY_PLAIN: Plain = { answers: {}, notes: {}, comments: {}, verdicts: {}, summary: "" };
+const tidy = (o: Record<string, string | undefined>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string>;
+const plainOf = (s: Saved): Plain => ({ answers: tidy(s.answers), notes: tidy(s.notes), comments: tidy(s.comments), verdicts: tidy(s.verdicts), summary: s.summary });
+const plainOfDraft = (d: Draft): Plain => ({ answers: d.answers ?? {}, notes: d.notes ?? {}, comments: d.comments ?? {}, verdicts: d.verdicts ?? {}, summary: d.summary ?? "" });
+/** What changed from `a` to `b`; null when nothing did. */
+function diffPlain(a: Plain, b: Plain): DraftPatch | null {
+  const out: DraftPatch = {};
+  let any = false;
+  for (const m of MAPS) {
+    const d: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(b[m])) if (a[m][k] !== v) d[k] = v;
+    for (const k of Object.keys(a[m])) if (!(k in b[m])) d[k] = null;
+    if (Object.keys(d).length) { out[m] = d; any = true; }
+  }
+  if (a.summary !== b.summary) { out.summary = b.summary; any = true; }
+  return any ? out : null;
+}
+function applyPlain(base: Plain, p: DraftPatch | null): Plain {
+  if (!p) return base;
+  const out: Plain = { ...base, answers: { ...base.answers }, notes: { ...base.notes }, comments: { ...base.comments }, verdicts: { ...base.verdicts } };
+  for (const m of MAPS) for (const [k, v] of Object.entries((p[m] ?? {}) as Record<string, string | null>)) { if (v === null) delete out[m][k]; else out[m][k] = v; }
+  if (p.summary !== undefined && p.summary !== null) out.summary = p.summary;
+  return out;
+}
+/** Entries only `local` has: work never shared before (kept from before drafts were shared, say). */
+function onlyIn(local: Plain, disk: Plain): DraftPatch | null {
+  const out: DraftPatch = {};
+  let any = false;
+  for (const m of MAPS) {
+    const d: Record<string, string> = {};
+    for (const [k, v] of Object.entries(local[m])) if (!(k in disk[m])) d[k] = v;
+    if (Object.keys(d).length) { out[m] = d; any = true; }
+  }
+  if (!disk.summary && local.summary) { out.summary = local.summary; any = true; }
+  return any ? out : null;
+}
+const samePlain = (a: Plain, b: Plain) => diffPlain(a, b) === null;
 const FLAG_TEXT = { look: "Look closely", problem: "Likely problem", none: "" } as const;
 const ANSWER_TEXT: Record<Answer, string> = { fine: "Fine", change: "Needs changing", question: "Question" };
 const VERDICT_TEXT: Record<Verdict, string> = { approve: "Approve", "request-changes": "Request changes", comment: "Comment" };
@@ -172,7 +213,89 @@ export function App() {
     return () => window.clearInterval(t);
   }, [aiBusy]);
   useEffect(() => store("looksie:ai-on", aiOn), [aiOn]);
-  useEffect(() => { if (review) store(savedKey(review), saved); }, [saved, review]);
+  // Answers, notes and comments are also kept on disk, shared with the reviewer's own Claude Code or Codex
+  // (looksie --mcp), so a review can be started in one and finished in the other. Each side sends only what changed,
+  // applied on top of what is on disk, so neither can wipe what the other just saved.
+  const synced = useRef<{ key: string; base: Plain; at: number } | null>(null);
+  const [posted, setPosted] = useState<Record<string, Posted>>({});
+  const draftTimer = useRef<number | undefined>(undefined);
+  // The review being opened, set at once (reviewRef only catches up after a render).
+  const openKey = useRef<string | null>(null);
+  // A save waiting for its 400ms: sent at once if another review is opened meanwhile.
+  const waitingSave = useRef<{ key: string; patch: DraftPatch; now: Plain } | null>(null);
+  const sendPatch = (key: string, patch: DraftPatch, now: Plain) => {
+    waitingSave.current = null;
+    api.patchDraft(key, patch).then((d) => {
+      if (!d) return;
+      store("looksie:shared:" + key, true);
+      const sy = synced.current;
+      // A newer copy (the agent's) may already have been taken while this was on its way.
+      if (sy && sy.key === key && d.updatedAt > sy.at) adopt(key, d, now);
+    }).catch(() => undefined);
+  };
+  /** Take the copy on disk, keeping any edit made here since `since`. */
+  const adopt = (key: string, d: Draft, since: Plain) => {
+    synced.current = { key, base: plainOfDraft(d), at: d.updatedAt };
+    setPosted(d.posted ?? {});
+    setSaved((cur) => {
+      const next = applyPlain(plainOfDraft(d), diffPlain(since, plainOf(cur)));
+      return samePlain(next, plainOf(cur)) ? cur : (next as Saved);
+    });
+  };
+  useEffect(() => {
+    if (!review) return;
+    store(savedKey(review), saved);
+    const key = reviewKey(review);
+    const sy = synced.current;
+    if (!sy || sy.key !== key) return;
+    window.clearTimeout(draftTimer.current);
+    const now = plainOf(saved);
+    const patch = diffPlain(sy.base, now);
+    if (!patch) return;
+    waitingSave.current = { key, patch, now };
+    draftTimer.current = window.setTimeout(() => sendPatch(key, patch, now), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, review]);
+  const takeDraft = (r: Review) => {
+    const key = reviewKey(r);
+    return api.loadDraft(r).then((d) => {
+      const sy = synced.current;
+      if (!d || !sy || sy.key !== key || d.updatedAt <= sy.at) return;
+      adopt(key, d, sy.base);
+    }).catch(() => undefined);
+  };
+  /** On opening a review: the disk copy wins, and anything only kept here is added to it. */
+  const startSync = (r: Review, local: Saved) => {
+    const key = reviewKey(r);
+    // A save still waiting for the review being left goes now, rather than being lost.
+    const wait = waitingSave.current;
+    if (wait && wait.key !== key) { window.clearTimeout(draftTimer.current); sendPatch(wait.key, wait.patch, wait.now); }
+    openKey.current = key;
+    synced.current = null;
+    setPosted({});
+    api.loadDraft(r).then((d) => {
+      if (openKey.current !== key) return;
+      if (!d || !d.updatedAt) {
+        synced.current = { key, base: EMPTY_PLAIN, at: 0 };
+        setSaved((cur) => ({ ...cur })); // shares what is kept here, if anything
+        return;
+      }
+      synced.current = { key, base: plainOfDraft(d), at: d.updatedAt };
+      setPosted(d.posted ?? {});
+      // Answers only kept here are added the first time this review is shared; after that the shared copy is the
+      // truth, so something removed in the agent stays removed.
+      const first = !load<boolean>("looksie:shared:" + key, false);
+      store("looksie:shared:" + key, true);
+      setSaved(applyPlain(plainOfDraft(d), first ? onlyIn(plainOf(local), plainOfDraft(d)) : null) as Saved);
+    }).catch(() => { if (openKey.current === key) synced.current = { key, base: plainOf(local), at: 0 }; });
+  };
+  useEffect(() => {
+    if (!review) return;
+    const r = review;
+    const t = window.setInterval(() => { if (document.visibilityState === "visible") takeDraft(r); }, 3000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review]);
 
   const active = accounts?.find((a) => a.active) ?? null;
   const auth: AuthStatus | null = active ? { login: active.login, source: active.sourceText } : null;
@@ -325,7 +448,10 @@ export function App() {
       setMoved(last !== null && last !== savedKey(r));
       store("looksie:last:" + r.id, savedKey(r));
       setReview(r);
-      setSaved({ ...EMPTY, ...load<Partial<Saved>>(savedKey(r), {}) });
+      const local = { ...EMPTY, ...load<Partial<Saved>>(savedKey(r), {}) };
+      setSaved(local);
+      api.setCurrentReview(r).catch(() => undefined);
+      startSync(r, local);
       // An earlier answer: from the app's AI folder (written here or by the reviewer's own agent), else from before 0.2.
       const keptAi = load<AiLayer | null>(aiKey(r), null);
       setAiLayer(keptAi);
@@ -503,23 +629,33 @@ export function App() {
       }
       const touching = review.steps.filter((s) => s.files.some((f) => samePr(f.pr, pr)));
       const suggested: Verdict = touching.some((s) => saved.answers[s.id] === "change") ? "request-changes" : touching.length > 0 && touching.every((s) => saved.answers[s.id] === "fine") ? "approve" : "comment";
-      const own = !!auth && p.summary.author === auth.login;
+      const own = !!auth && p.summary.author.toLowerCase() === auth.login.toLowerCase();
       const verdict = own ? "comment" : (saved.verdicts[prKey(pr)] ?? suggested);
       return { pr, commit: p.headSha, verdict, summary: saved.summary.trim(), comments };
     });
   }, [review, saved, auth]);
 
   // A review with no verdict to give, no summary and no comments has nothing in it, and the host would refuse it.
-  const sendable = submissions.filter((s) => s.verdict === "approve" || s.summary !== "" || s.comments.length > 0);
+  // A pull request already reviewed at this commit (here or from the reviewer's agent) is never posted again.
+  const postedHere = (s: ReviewSubmission) => posted[prKey(s.pr)]?.commit === s.commit;
+  const sendable = submissions.filter((s) => !postedHere(s) && (s.verdict === "approve" || s.summary !== "" || s.comments.length > 0));
   const submit = async () => {
     if (!review || sendable.length === 0) return;
-    const n = sendable.length;
+    // The agent may have posted a moment ago: check the shared copy once more.
+    const fresh = await api.loadDraft(review).catch(() => null);
+    const already = fresh?.posted ?? {};
+    const toSend = sendable.filter((s) => already[prKey(s.pr)]?.commit !== s.commit);
+    if (fresh?.posted) setPosted(fresh.posted);
+    if (toSend.length === 0) return;
+    const n = toSend.length;
     if (!window.confirm(`Post ${plural(n, "review")} to ${hostName(review.prs[0].summary.pr.host)} as ${auth?.login ?? "you"}? This cannot be undone from Looksie.`)) return;
     setSending(true);
     const out: NonNullable<typeof sent> = [];
-    for (const s of sendable) {
+    for (const s of toSend) {
       try {
-        out.push({ pr: prLabel(s.pr), verdict: s.verdict, url: await api.submitReview(s) });
+        const url = await api.submitReview(s);
+        out.push({ pr: prLabel(s.pr), verdict: s.verdict, url });
+        api.patchDraft(reviewKey(review), { posted: { [prKey(s.pr)]: { url, commit: s.commit, at: Date.now() } } }).then((d) => d && setPosted(d.posted ?? {})).catch(() => undefined);
       } catch (e) {
         out.push({ pr: prLabel(s.pr), verdict: s.verdict, error: String((e as Error).message ?? e) });
       }
@@ -915,7 +1051,7 @@ export function App() {
                     </div>
                     <div className="aiway">
                       <p className="cap">2 · Your own Claude Code or Codex</p>
-                      <p className="mute" style={{ fontSize: 13.5 }}>Your agent does the AI work on your own plan and saves its answer into Looksie. Connect it once: Looksie gives it a review skill and its tools.</p>
+                      <p className="mute" style={{ fontSize: 13.5 }}>Connect it once to do the whole review in chat, or to have it write the AI help on your own plan. Looksie gives it a review skill and its tools.</p>
                       {!agents ? <p className="mute" style={{ display: "flex", gap: 10, alignItems: "center" }}><span className="spin sm" />Looking for Claude Code and Codex…</p> : agents.map((a) => <AgentRow key={a.id} agent={a} onChange={setAgents} />)}
                       {agents && (
                         <details className="agentway">
@@ -948,7 +1084,7 @@ export function App() {
               </div>
               <div className="card" style={{ flex: "1 1 340px", display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 0 0 2px var(--acc), var(--shadow)" }}>
                 <div className="chd" style={{ margin: 0 }}><h2 className="cap" style={{ color: "var(--acc)" }}>Pro</h2>{plan !== "free" && <span className="tag ai">{plan === "pro" ? "Your plan" : "On trial"}</span>}</div>
-                <p className="gname" style={{ fontSize: 26 }}>{shop.priceMonthly} a month <span className="mute" style={{ fontSize: 15, fontWeight: 400 }}>or {shop.priceYearly} a year, two months free</span></p>
+                <p className="gname" style={{ fontSize: 26 }}>{shop.priceMonthly} a month <span className="mute" style={{ fontSize: 15, fontWeight: 400 }}>or {shop.priceYearly} a year, 20% off</span></p>
                 <ul className="ticks"><li>Everything in Free</li><li><b>Private repositories</b>, on every connection</li></ul>
                 <p className="cap" style={{ marginTop: 4 }}>Coming to Pro*</p>
                 <ul className="ticks soon"><li><b>Ask AI about a decision:</b> talk a change through before you choose</li><li><b>Your own rules:</b> checks for the things your team cares about</li></ul>
@@ -1087,15 +1223,18 @@ export function App() {
                   </div>
                   {ai && (
                     <details className="agentway">
-                      <summary>Use your own Claude Code or Codex</summary>
+                      <summary>Review it in Claude Code or Codex instead</summary>
                       {(() => {
-                        const prs = review.prs.map((p) => prKey(p.summary.pr)).join(" ");
                         const on = (agents ?? []).filter((a) => a.connected && !a.elsewhere);
                         return on.length > 0
-                          ? on.map((a) => <Copyable key={a.id} label={`Paste into ${a.name}`} text={`${a.command} ${prs}`} onCopy={() => setAgentWait(Date.now())} />)
-                          : <Copyable label="Paste into Claude Code or Codex" text={`Use the looksie tools to write Looksie's AI layer for ${prs}: call ai_prompt, write the JSON answer it asks for, then call save_ai_layer with from set to your own name.`} onCopy={() => setAgentWait(Date.now())} />;
+                          ? <>
+                              <p style={{ fontSize: 14 }}>Type this in {on.map((a) => a.name).join(" or ")}. It picks up the review open here: go through the decisions in chat, ask about the code, and post when you are ready. Answers show up here too.</p>
+                              {on.map((a) => <Copyable key={a.id} label={`In ${a.name}`} text={a.command} />)}
+                              <p className="mute" style={{ fontSize: 12.5 }}>Or have it write the AI help shown here (a summary and a question per decision), on your own plan:</p>
+                              <Copyable label={`Ask ${on[0].name}`} text="Use the looksie tools to write Looksie's AI help for the review open in Looksie." onCopy={() => setAgentWait(Date.now())} />
+                            </>
+                          : <p style={{ fontSize: 14 }}>Connect Claude Code or Codex once in <button className="linkb" onClick={() => go("connections")}>Settings, Your AI</button>. Then you can do the whole review in chat, and your answers show up here too.</p>;
                       })()}
-                      <p className="mute" style={{ fontSize: 12.5 }}>{(agents ?? []).some((a) => a.connected) ? "Its answer appears here by itself, checked like any other: only what quotes real lines is kept." : "Connect your agent once in Settings, Your AI. Its answer is checked like any other: only what quotes real lines is kept."}</p>
                     </details>
                   )}
                 </div>
@@ -1344,7 +1483,7 @@ export function App() {
               <div className="grow" style={{ gap: 12 }}>
                 {submissions.map((s) => {
                   const p = review.prs.find((x) => samePr(x.summary.pr, s.pr))!;
-                  const own = !!auth && p.summary.author === auth.login;
+                  const own = !!auth && p.summary.author.toLowerCase() === auth.login.toLowerCase();
                   return (
                     <div key={prKey(s.pr)} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <div className="prsec">
@@ -1374,6 +1513,7 @@ export function App() {
                   </label>
                   <button className="btn" style={{ justifyContent: "center" }} onClick={async () => setPayloads(JSON.stringify(await Promise.all(submissions.map((s) => api.reviewPayload(s))), null, 2))}>Show what will be sent</button>
                   <button className="btn go" style={{ justifyContent: "center", minHeight: 52, fontSize: 16 }} disabled={sending || sendable.length === 0} onClick={submit}>{sending ? "Sending…" : `Submit ${plural(sendable.length, "review")}`}</button>
+                  {submissions.some(postedHere) && <p className="mute" style={{ fontSize: 12 }}>Already posted: {submissions.filter(postedHere).map((s) => <a key={prKey(s.pr)} href={posted[prKey(s.pr)].url} onClick={(e) => { e.preventDefault(); api.openUrl(posted[prKey(s.pr)].url); }}>{prLabel(s.pr)} </a>)}</p>}
                   {sendable.length < submissions.length && <p className="mute" style={{ fontSize: 12 }}>{sendable.length === 0 ? "Nothing to send yet: add a summary, a comment, or an approval." : `${plural(submissions.length - sendable.length, "pull request")} with nothing to say will be left alone.`}</p>}
                   <p className="mute" style={{ fontSize: 12 }}>Posts to {hostName(review.prs[0].summary.pr.host)} as {auth?.login ?? "you"}, one review per pull request. Nothing is sent until you press Submit and confirm.</p>
                 </div>
@@ -1472,11 +1612,12 @@ export function App() {
               <div className="body" style={{ gap: 14 }}>
                 <h2 className="serif" style={{ fontSize: 24 }}>How Looksie decides</h2>
                 <p>Looksie splits a change into steps by layer (data, server, screens, tests and build, docs). Files in the same place go in one step.</p>
-                <div><p className="cap" style={{ marginBottom: 6 }}>A step is a decision when</p>
-                  <ul className="ticks"><li>a rule found something: a package dropped from the lockfile, a workflow that cannot run, a new secret or setting, stored data being changed, tests switched off, or folders that always change together where only one did</li><li>it touches sign-in, money or secrets</li><li>it changes code that already ran, rather than only adding new code</li><li>other steps build on it, or no changed test covers it</li><li>the author left a TODO or an assumption in it</li></ul></div>
+                <div><p className="cap" style={{ marginBottom: 6 }}>What makes a step a decision (they add up)</p>
+                  <ul className="ticks"><li>a rule found something: a package dropped from the lockfile, a workflow that cannot run, a new secret or setting, stored data being changed, tests switched off, or folders that always change together where only one did</li><li>it touches sign-in, money or secrets</li><li>it changes code that already ran, rather than only adding new code</li><li>other steps build on it, or no changed test covers it</li><li>the author left a TODO or an assumption in it</li><li>it changes the database's shape, or how it builds and deploys</li></ul></div>
                 <div><p className="cap" style={{ marginBottom: 6 }}>It is a quick look when</p>
                   <ul className="ticks"><li>none of that applies and it is small</li><li>it is only tests or only docs</li><li>it is the same edit repeated across many files. Any file that breaks the pattern is called out, and makes it a decision</li></ul></div>
-                <p>Bigger reviews get more decisions, but slowly: about 3 for a small pull request, about 12 for a very big one. Past that, steps that scored like decisions wait first in the quick looks, marked as over the limit, and one click makes them all decisions. These are never held back by the limit: anything a rule flags, and changes to sign-in, money, secrets, stored data, or how it builds and deploys.</p>
+                <p>Bigger reviews get more decisions, but slowly: about 3 for a small pull request, about 12 for a very big one. Past that, steps that scored like decisions wait first in the quick looks, marked as over the limit, and one click makes them all decisions. These are never held back by the limit: anything a rule flags, and changes to files whose path points to sign-in, money or secrets, to stored data, or to how it builds and deploys.</p>
+                <p>Inside each step, the files most likely to need a fix for their size come first.</p>
                 <p>Generated and vendored files are set aside, but are still in Files.</p>
                 <p>With your AI on, it adds its own question to each decision and may flag a step too. Its flags are marked as AI.</p>
                 <p className="note">This is a guide to where to look, not a verdict. Open any quick look and answer it like a decision if you want to. Each step shows the reasons that applied to it.</p>
@@ -1639,7 +1780,7 @@ function AgentRow({ agent: a, onChange }: { agent: AgentState; onChange: (s: Age
         <b>{live && <span className="dot ok" />}{a.name}</b>
         <span className="mute">
           {busy ? (live ? "Disconnecting…" : "Connecting…")
-            : live ? <>Connected. In a new {a.name} session, type <span className="mono">{a.command} owner/repo#123</span>, or just ask it to review a pull request.</>
+            : live ? <>Connected. In a new {a.name} session, type <span className="mono">{a.command}</span> to review the pull request open here, or just ask it to review a pull request.</>
             : a.elsewhere ? "Connected to another copy of Looksie. Connect again to use this one."
             : a.found ? "Not connected yet."
             : "Not found on this computer."}

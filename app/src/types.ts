@@ -145,6 +145,11 @@ export type Saved = {
   verdicts: Record<string, Verdict | undefined>;
   summary: string;
 };
+/** Saved, as shared on disk with the reviewer's own agent (looksie_core::drafts::Draft). */
+export type Posted = { url: string; commit: string; at: number };
+export type Draft = { key: string; answers: Record<string, string>; notes: Record<string, string>; comments: Record<string, string>; verdicts: Record<string, string>; summary: string; posted: Record<string, Posted>; updatedAt: number };
+/** Only what changed; null removes an entry (looksie_core::drafts::Patch). */
+export type DraftPatch = { answers?: Record<string, string | null>; notes?: Record<string, string | null>; comments?: Record<string, string | null>; verdicts?: Record<string, string | null>; summary?: string | null ; posted?: Record<string, Posted | null> };
 
 export const LAYERS: { id: Layer; title: string }[] = [
   { id: "data", title: "Data" },

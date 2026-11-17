@@ -523,6 +523,30 @@ fn saved_ai(key: String) -> Option<looksie_core::ai_store::Stored> {
     looksie_core::ai_store::load_key(&paths::ai_dir().ok()?, &key)
 }
 
+/// The reviewer's work in progress on a review, as saved by the app or by their own agent. `key` as for saved_ai.
+#[tauri::command]
+fn load_draft(key: String) -> Option<looksie_core::drafts::Draft> {
+    Some(looksie_core::drafts::load_key(&paths::drafts_dir().ok()?, &key))
+}
+
+/// Saves what changed in the reviewer's work in progress, on top of what their own agent may have saved meanwhile.
+/// Returns the whole draft as saved.
+#[tauri::command]
+fn patch_draft(key: String, patch: looksie_core::drafts::Patch) -> Result<looksie_core::drafts::Draft, String> {
+    looksie_core::drafts::apply(&paths::drafts_dir()?, &key, &patch)
+}
+
+/// Remembers which review is open, so the reviewer's agent can pick it up without anything being copied.
+#[tauri::command]
+fn set_current_review(refs: Vec<String>, key: String, title: String) -> Result<(), String> {
+    let v = serde_json::json!({ "refs": refs, "key": key, "title": title, "openedAt": looksie_core::drafts::now_ms() });
+    // Through a temporary file, so the agent never reads half of it.
+    let path = paths::current_file()?;
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, v.to_string()).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
 /// The reviewer's own Claude Code and Codex: whether each is on this computer and connected to Looksie.
 #[tauri::command]
 async fn agent_states() -> Vec<agents::AgentState> {
@@ -550,7 +574,7 @@ pub fn run_mcp() -> i32 {
         let gh = GitHub::for_host(token, &host)?;
         let state = read_licence_now();
         let private_ok = licence::can_open_private(&licence::status(&state, now()));
-        looksie_core::mcp::serve(gh, Some(paths::ai_dir()?), private_ok).await
+        looksie_core::mcp::serve(gh, Some(looksie_core::mcp::AppDirs { ai: paths::ai_dir()?, drafts: paths::drafts_dir()?, current: paths::current_file()? }), private_ok).await
     });
     match result {
         Ok(()) => 0,
@@ -596,7 +620,7 @@ pub fn run() {
             std::thread::spawn(agents::refresh);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![cached_reviews, list_accounts, use_account, add_account, remove_account, list_inbox, suggest_groups, build_review, licence_status, recheck_licence, offer_left, start_trial, activate_licence, remove_licence, review_payload, submit_review, ai_setup, set_ai_key, remove_ai_key, set_ai_model, ai_prompt, ai_estimate, run_ai, saved_ai, agent_states, connect_agent, disconnect_agent, copy_text, open_url])
+        .invoke_handler(tauri::generate_handler![cached_reviews, list_accounts, use_account, add_account, remove_account, list_inbox, suggest_groups, build_review, licence_status, recheck_licence, offer_left, start_trial, activate_licence, remove_licence, review_payload, submit_review, ai_setup, set_ai_key, remove_ai_key, set_ai_model, ai_prompt, ai_estimate, run_ai, saved_ai, load_draft, patch_draft, set_current_review, agent_states, connect_agent, disconnect_agent, copy_text, open_url])
         .run(tauri::generate_context!())
         .expect("Looksie could not start");
 }

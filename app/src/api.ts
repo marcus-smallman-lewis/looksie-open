@@ -1,7 +1,10 @@
 // The only place the UI talks to the backend.
 // Inside the app this calls Rust commands. In a plain browser (npm run dev) it reads app/fixtures/*.json instead.
 
-import type { Account, AgentState, AiLayer, AiSetup, SavedAi, CachedReview, GroupSuggestion, PrSummary, Review, ReviewSubmission, Shop } from "./types";
+import type { Account, AgentState, AiLayer, AiSetup, Draft, DraftPatch, SavedAi, CachedReview, GroupSuggestion, PrSummary, Review, ReviewSubmission, Shop } from "./types";
+
+/** The same key as ai_store::key in Rust: host/owner/repo#number@headsha, lower case, sorted, joined by +. */
+export const reviewKey = (review: Review) => review.prs.map((p) => `${p.summary.pr.host}/${p.summary.pr.owner}/${p.summary.pr.repo}#${p.summary.pr.number}@${p.headSha}`.toLowerCase()).sort().join("+");
 
 const inApp = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -77,7 +80,11 @@ export const api = {
   aiEstimate: (review: Review) => (inApp ? call<{ chars: number; dollars: number }>("ai_estimate", { review }) : Promise.resolve({ chars: 40000, dollars: 0.28 })),
   // The same key as ai_store::key in Rust, so only a short string crosses over, however big the review.
   copyText: (text: string) => (inApp ? call<void>("copy_text", { text }) : navigator.clipboard.writeText(text)),
-  savedAi: (review: Review) => (inApp ? call<SavedAi | null>("saved_ai", { key: review.prs.map((p) => `${p.summary.pr.host}/${p.summary.pr.owner}/${p.summary.pr.repo}#${p.summary.pr.number}@${p.headSha}`.toLowerCase()).sort().join("+") }) : Promise.resolve(null)),
+  savedAi: (review: Review) => (inApp ? call<SavedAi | null>("saved_ai", { key: reviewKey(review) }) : Promise.resolve(null)),
+  // Work in progress, shared with the reviewer's own agent (Claude Code, Codex) through a file.
+  loadDraft: (review: Review) => (inApp ? call<Draft | null>("load_draft", { key: reviewKey(review) }) : Promise.resolve(null)),
+  patchDraft: (key: string, patch: DraftPatch) => (inApp ? call<Draft>("patch_draft", { key, patch }) : Promise.resolve(null)),
+  setCurrentReview: (review: Review) => (inApp ? call<void>("set_current_review", { refs: review.prs.map((p) => `${p.summary.pr.owner}/${p.summary.pr.repo}#${p.summary.pr.number}`), key: reviewKey(review), title: review.briefing.title }) : Promise.resolve()),
   aiPrompt: (review: Review) => (inApp ? call<string>("ai_prompt", { review }) : Promise.resolve("(The exact prompt is shown here in the app.)")),
   runAi: (review: Review) => call<AiLayer>("run_ai", { review }),
   openUrl: (url: string) => (inApp ? call<void>("open_url", { url }) : Promise.resolve(void window.open(url, "_blank", "noopener"))),
