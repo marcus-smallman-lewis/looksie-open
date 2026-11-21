@@ -12,7 +12,7 @@ How often do the files real reviewers asked to have fixed end up in Looksie's de
 - `score.py`: runs Looksie on each pull request as it was at that commit and compares its decisions with reading the
   same number of lines in random order, or biggest files first. `learn.py` fits the weights that order files inside a
   step on the tuning repositories; `simulate_focus.py` tries such rules without rebuilding (it can also fold files,
-  an idea that was dropped); `explore.py` holds shared loading code; `make_page.py` writes the benchmarks page.
+  an idea that was dropped); `simulate_select.py` tries ways of choosing which steps become decisions, and `crossval.py` checks them with three-fold cross-validation by repository; `explore.py` holds shared loading code; `make_page.py` writes the benchmarks page.
   The weights were fitted on 21 of the 34 repositories and never on the other 13.
 
 Scoring needs Looksie's command-line tool, which links the closed engine, so it is not in this repository; the list

@@ -2,9 +2,9 @@
 
     python bench/make_page.py
 
-Reads (from bench/out): results_at_v11_all.json (this version, every pull request), results_at_v11_test.json (this
-version, held-out repositories only) and results_at_before_test.json (the previous engine, held-out repositories).
-All three were made with BENCH_AT=1: each pull request as it was when its reviewer first commented.
+Reads (from bench/out): results_at_v12_all.json (this version, every pull request), results_at_v12_test.json (this
+version, held-out repositories only) and results_at_v11_all.json (the previous version). All made with BENCH_AT=1:
+each pull request as it was when its reviewer first commented.
 """
 import io, json, os, datetime
 
@@ -13,12 +13,11 @@ ROOT = os.path.dirname(HERE)
 SITE = os.path.join(ROOT, 'site')
 OUT = os.path.join(HERE, 'out')
 load = lambda name: json.load(open(os.path.join(OUT, name), encoding='utf-8'))
-ALLR, TEST, BEFORE = load('results_at_v11_all.json'), load('results_at_v11_test.json'), load('results_at_before_test.json')
+ALLR, TEST, V11 = load('results_at_v12_all.json'), load('results_at_v12_test.json'), {s['label']: s for s in load('results_at_v11_all.json')['summary']}
 sums = {s['label']: s for s in ALLR['summary']}
 ALL = sums['All']
 BIG = sums.get('size: over 5,000 lines')
 HELD = TEST['summary'][0]
-HELD_BEFORE = BEFORE['summary'][0]
 rows = ALLR['rows']
 VERSION = json.load(open(os.path.join(ROOT, 'app', 'src-tauri', 'tauri.conf.json'), encoding='utf-8'))['version']
 repos = sorted({r['repo'] for r in rows})
@@ -42,6 +41,14 @@ def card(title, note, bars, foot):
 def recall_card(s, title, note):
     return card(title, note, [bar('Looksie decisions', s['recall'], 'me'), bar('Random files, same number of lines', s['recall_random']), bar('Biggest files first, same number of lines', s['recall_biggest'])],
                 f"{s['prs']} pull requests · {s['fixed_files']} files that needed fixing · the decisions cover {pct(s['lines_read_share'])} of the changed lines · {s['decisions_median']} decisions (median)")
+
+
+def change_card():
+    old, new = V11['size: over 5,000 lines'], BIG
+    return card('This version: same fixes, less reading on big pull requests',
+                "In reviews of 1,000 lines or more, decisions are now chosen by risk for the lines you read, rather than by the highest score, which favoured big steps. Pull requests over 5,000 lines:",
+                [bar(f'Looksie {VERSION}: share of the change in decisions', new['lines_read_share'], 'me'), bar('Looksie before this version', old['lines_read_share'])],
+                f"The decisions held {new['where']['decision']} of the {new['fixed_files']} files reviewers asked to have fixed, against {old['where']['decision']} before. Smaller pull requests are unchanged. On the repositories this rule was not developed on, it made no measurable difference; they had few pull requests this big.")
 
 
 def order_card(s, title, note, before=None):
@@ -77,7 +84,7 @@ head = head.replace('@media (max-width:640px)', '''.doc h3{font-size:18px;font-w
 @media (max-width:640px)''', 1)
 today = datetime.date.today()
 date = f'{today.day} {today.strftime("%B %Y")}'
-big = recall_card(BIG, 'Big pull requests (over 5,000 lines)', 'What Looksie is built for, and where it is weakest today: a decision is a whole folder, so on these the decisions still cover most of the change. Grouping similar folders, and smaller decisions on big pull requests, are the next piece of engine work.') if BIG and BIG['prs'] >= 5 else ''
+big = recall_card(BIG, 'Big pull requests (over 5,000 lines)', 'What Looksie is built for. A decision is still a whole folder, so the next step is smaller decisions inside big folders, and grouping folders that got the same change.') if BIG and BIG['prs'] >= 5 else ''
 
 body = f'''<main class="doc">
 <h1>Benchmarks</h1>
@@ -87,15 +94,15 @@ body = f'''<main class="doc">
 <li>We took real pull requests where a reviewer asked for something to be fixed and the author then changed that code, and ran Looksie on each pull request <b>as it was when the reviewer first commented</b>, before any fix.</li>
 <li>Looksie's decisions held <b>{pct(ALL['recall'])}</b> of the files that needed fixing. Reading the same amount in random order finds {pct(ALL['recall_random'])}; biggest files first, {pct(ALL['recall_biggest'])}.</li>
 <li>Reading in Looksie's order, the first 20% of a pull request already reaches <b>{pct(ALL['found_after']['20%'])}</b> of them, against {pct(ALL['found_after_random']['20%'])} in random order.</li>
-<li>The decisions still cover most of the changed lines ({pct(ALL['lines_read_share'])} overall, {pct(BIG['lines_read_share']) if BIG else '–'} on pull requests over 5,000 lines). Making them smaller is the next thing we are working on.</li>
+<li>On pull requests over 5,000 lines, this version's decisions cover {pct(BIG['lines_read_share'])} of the change, down from {pct(V11['size: over 5,000 lines']['lines_read_share'])}, for the same share of what needed fixing.</li>
 </ul></div>
 
 <h2>Results</h2>
 {recall_card(ALL, 'All pull requests', "Files that reviewers asked to have fixed, and that were in one of Looksie's decisions.")}
 {order_card(ALL, 'What you meet first', 'Reading the decisions in the order Looksie shows them, then the rest.')}
-{recall_card(HELD, 'Repositories the tuning never saw', f'Version {VERSION} orders files inside each step with weights fitted on 21 of the 34 repositories. These are the other 13, which the weights never saw.')}
-{order_card(HELD, "This version's change, on those repositories", 'The decisions are the same as before; only the order of files inside them changed.', HELD_BEFORE)}
+{change_card()}
 {big}
+{recall_card(HELD, 'Repositories the tuning never saw', 'The weights Looksie uses to weigh files were fitted on 21 of the 34 repositories. These are the other 13, which the weights never saw.')}
 
 <h2>By language, size and author</h2>
 <div class="tablewrap"><table>
@@ -114,7 +121,7 @@ body = f'''<main class="doc">
 <li><b>When:</b> each pull request as it was at the commit its reviewer first commented on, so the fixes are not in what Looksie sees.</li>
 <li><b>Looksie:</b> the same engine as the app, from the command line, with no AI. A file counts if it is in a decision.</li>
 <li><b>Baselines:</b> for each pull request, files read in random order (averaged over 500 shuffles) or biggest first, stopping before they read more lines than Looksie's decisions cover.</li>
-<li><b>Held out:</b> the weights that order files inside a step were fitted on 21 of the 34 repositories and never on the other 13.</li>
+<li><b>Held out:</b> the weights that weigh files were fitted on 21 of the 34 repositories and never on the other 13. This version's change to how decisions are chosen was developed on the 21; on the other 13 it made no measurable difference.</li>
 </ul>
 
 <h2>What this does not show</h2>
